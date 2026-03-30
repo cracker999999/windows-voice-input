@@ -1,0 +1,5 @@
+﻿<Project>
+  <PropertyGroup>
+    <PublishDir>$(MSBuildThisFileDirectory)Release\</PublishDir>
+  </PropertyGroup>
+</Project>

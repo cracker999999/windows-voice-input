@@ -1,0 +1,15 @@
+﻿<Window x:Class="VoiceInput.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Width="0"
+        Height="0"
+        ShowActivated="False"
+        Visibility="Hidden"
+        ResizeMode="NoResize"
+        Title="VoiceInputHost">
+    <Grid />
+</Window>
