@@ -141,6 +141,19 @@ public partial class OverlayWindow
         };
         CapsuleBorder.BeginAnimation(WidthProperty, widthAnimation, HandoffBehavior.SnapshotAndReplace);
 
+        var currentWindowWidth = double.IsNaN(Width) ? targetWidth : Width;
+        var windowWidthAnimation = new DoubleAnimation
+        {
+            From = currentWindowWidth,
+            To = targetWidth,
+            Duration = TimeSpan.FromSeconds(0.25),
+            EasingFunction = new QuadraticEase
+            {
+                EasingMode = EasingMode.EaseOut
+            }
+        };
+        BeginAnimation(WidthProperty, windowWidthAnimation, HandoffBehavior.SnapshotAndReplace);
+
         var workArea = SystemParameters.WorkArea;
         var targetLeft = workArea.Left + (workArea.Width - targetWidth) / 2;
         var currentLeft = double.IsNaN(Left) ? targetLeft : Left;
