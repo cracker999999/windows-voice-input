@@ -1,5 +1,7 @@
-﻿using System.Windows;
+﻿using System.Diagnostics;
+using System.Windows;
 using System.Windows.Media;
+using System.Windows.Navigation;
 using VoiceInput.Models;
 using VoiceInput.Services;
 
@@ -102,5 +104,29 @@ public partial class SettingsWindow
         StatusTextBlock.Foreground = success
             ? Brushes.ForestGreen
             : Brushes.IndianRed;
+    }
+
+    private void OnAzureQuotaLinkRequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        if (e.Uri is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"打开 Azure Portal 失败: {ex.Message}", false);
+        }
+        finally
+        {
+            e.Handled = true;
+        }
     }
 }

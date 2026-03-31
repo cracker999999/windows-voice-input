@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="560"
-        Height="390"
+        Height="420"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Title="Settings">
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -27,24 +28,31 @@
         <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="Azure Region" />
         <TextBox x:Name="AzureSpeechRegionTextBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,12" />
 
-        <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Base URL" />
-        <TextBox x:Name="ApiBaseUrlTextBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,12">
+            <Hyperlink NavigateUri="https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/overview"
+                       RequestNavigate="OnAzureQuotaLinkRequestNavigate">
+                查看用量 →
+            </Hyperlink>
+        </TextBlock>
 
-        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Key" />
-        <TextBox x:Name="ApiKeyTextBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Base URL" />
+        <TextBox x:Name="ApiBaseUrlTextBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,12" />
 
-        <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="Model" />
-        <TextBox x:Name="ModelTextBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Key" />
+        <TextBox x:Name="ApiKeyTextBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,12" />
+
+        <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="Model" />
+        <TextBox x:Name="ModelTextBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,12" />
 
         <TextBlock x:Name="StatusTextBlock"
-                   Grid.Row="5"
+                   Grid.Row="6"
                    Grid.Column="0"
                    Grid.ColumnSpan="2"
                    Margin="0,0,0,12"
                    Foreground="#FF3E3E3E"
                    Text="" />
 
-        <StackPanel Grid.Row="6"
+        <StackPanel Grid.Row="7"
                     Grid.Column="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
