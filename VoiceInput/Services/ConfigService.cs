@@ -135,7 +135,9 @@ public sealed class ConfigService
             ? AppConfig.DefaultModel
             : config.Model.Trim();
 
-        var fallbackHotkey = AppConfig.DefaultFallbackHotkey;
+        var fallbackHotkey = string.IsNullOrWhiteSpace(config.FallbackHotkey)
+            ? AppConfig.DefaultFallbackHotkey
+            : config.FallbackHotkey.Trim();
 
         return new AppConfig
         {
@@ -150,5 +152,3 @@ public sealed class ConfigService
         };
     }
 }
-
-

@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="560"
-        Height="420"
+        Height="460"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Title="Settings">
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -35,24 +36,43 @@
             </Hyperlink>
         </TextBlock>
 
-        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Base URL" />
-        <TextBox x:Name="ApiBaseUrlTextBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="3" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="触发热键" />
+        <Border x:Name="HotkeyRecorderBorder"
+                Grid.Row="3"
+                Grid.Column="1"
+                Height="28"
+                Margin="0,0,0,12"
+                Padding="8,0,8,0"
+                BorderBrush="#FFABADB3"
+                BorderThickness="1"
+                Background="White"
+                CornerRadius="2"
+                Cursor="Hand"
+                Focusable="True"
+                MouseLeftButtonDown="OnHotkeyRecorderClick">
+            <TextBlock x:Name="HotkeyRecorderTextBlock"
+                       VerticalAlignment="Center"
+                       Text="RightCtrl" />
+        </Border>
 
-        <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Key" />
-        <TextBox x:Name="ApiKeyTextBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="4" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Base URL" />
+        <TextBox x:Name="ApiBaseUrlTextBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,12" />
 
-        <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="Model" />
-        <TextBox x:Name="ModelTextBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,12" />
+        <TextBlock Grid.Row="5" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="API Key" />
+        <TextBox x:Name="ApiKeyTextBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,12" />
+
+        <TextBlock Grid.Row="6" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,12" Text="Model" />
+        <TextBox x:Name="ModelTextBox" Grid.Row="6" Grid.Column="1" Margin="0,0,0,12" />
 
         <TextBlock x:Name="StatusTextBlock"
-                   Grid.Row="6"
+                   Grid.Row="7"
                    Grid.Column="0"
                    Grid.ColumnSpan="2"
                    Margin="0,0,0,12"
                    Foreground="#FF3E3E3E"
                    Text="" />
 
-        <StackPanel Grid.Row="7"
+        <StackPanel Grid.Row="8"
                     Grid.Column="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"

@@ -6,7 +6,7 @@
     <Application.Resources>
         <tb:TaskbarIcon x:Key="AppTrayIcon"
                         IconSource="pack://application:,,,/Assets/VoiceInput.ico"
+                        TrayMouseDoubleClick="OnTrayMouseDoubleClick"
                         ToolTipText="VoiceInput" />
     </Application.Resources>
 </Application>
-

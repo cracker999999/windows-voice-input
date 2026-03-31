@@ -1,11 +1,15 @@
 ## MODIFIED Requirements
 
 ### Requirement: Settings UI layout
-SettingsWindow SHALL display an Azure Portal quota link below the Azure Region field. The link SHALL be styled as a hyperlink (not a button) and labeled "查看用量 →".
+SettingsWindow SHALL display: (1) an Azure Portal quota link below the Azure Region field, styled as a hyperlink labeled "查看用量 →"; (2) a "触发热键" hotkey recorder row (clickable TextBox-style control) positioned after the quota link row and before the API Base URL row.
 
 #### Scenario: Quota link visible in settings
 - **WHEN** user opens SettingsWindow
 - **THEN** a "查看用量 →" hyperlink is visible below the Azure Region row
+
+#### Scenario: Hotkey recorder visible in settings
+- **WHEN** user opens SettingsWindow
+- **THEN** a "触发热键" recorder control is visible showing the current hotkey
 
 #### Scenario: Existing fields unaffected
 - **WHEN** user opens SettingsWindow

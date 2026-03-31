@@ -37,6 +37,7 @@ public partial class App
     private TextInjector? _textInjector;
 
     private bool _isRecording;
+    private volatile bool _suppressHotkeyTrigger;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -238,15 +239,27 @@ public partial class App
             return;
         }
 
-        _settingsWindow = new SettingsWindow(_configService, _llmService)
+        _settingsWindow = new SettingsWindow(
+            _configService,
+            _llmService,
+            key => _keyboardHook?.SetFallbackHotkey(key),
+            isRecordingHotkey => _suppressHotkeyTrigger = isRecordingHotkey)
         {
             Owner = _mainWindow
         };
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Closed += (_, _) =>
+        {
+            _suppressHotkeyTrigger = false;
+            _settingsWindow = null;
+        };
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
 
+    private void OnTrayMouseDoubleClick(object sender, RoutedEventArgs e)
+    {
+        OpenSettingsWindow();
+    }
     private void OpenConfigFolder()
     {
         if (_configService is null)
@@ -264,10 +277,20 @@ public partial class App
 
     private async Task HandleRecordingStartedAsync()
     {
+        if (_suppressHotkeyTrigger)
+        {
+            return;
+        }
+
         await _pipelineLock.WaitAsync().ConfigureAwait(false);
 
         try
         {
+            if (_suppressHotkeyTrigger)
+            {
+                return;
+            }
+
             if (_isRecording)
             {
                 return;
@@ -322,10 +345,20 @@ public partial class App
 
     private async Task HandleRecordingStoppedAsync()
     {
+        if (_suppressHotkeyTrigger && !_isRecording)
+        {
+            return;
+        }
+
         await _pipelineLock.WaitAsync().ConfigureAwait(false);
 
         try
         {
+            if (_suppressHotkeyTrigger && !_isRecording)
+            {
+                return;
+            }
+
             if (!_isRecording)
             {
                 return;
@@ -437,3 +470,6 @@ public partial class App
         e.SetObserved();
     }
 }
+
+
+
