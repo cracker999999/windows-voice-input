@@ -49,10 +49,10 @@ VoiceInput 是一个 Windows 10 后台语音输入工具：按住录音热键开
 - `llmEnabled`: 是否开启 LLM 纠错
 - `apiBaseUrl/apiKey/model`: LLM 纠错接口参数
 - `azureSpeechKey/azureSpeechRegion`: Azure Speech 认证信息
-- `fallbackHotkey`: Fn 不可捕获时的回退热键（默认右 Ctrl）
+- `fallbackHotkey`: Fn 不可捕获时的回退热键（默认 `RightCtrl`，支持组合键如 `RightCtrl+R`）
 
 ## 使用说明
-1. 托盘右键菜单可切换语言、开关 LLM、打开 Settings、退出
+1. 托盘右键菜单可切换语言、开关 LLM、打开 Settings、退出；双击托盘图标也可直接打开 Settings
 2. 按住录音热键开始录音，松开触发转写
 3. 若启用 LLM，悬浮窗会显示 `Refining...` 后再注入
 
@@ -66,6 +66,21 @@ VoiceInput 是一个 Windows 10 后台语音输入工具：按住录音热键开
 - Model
 
 可点 `Test` 验证连通性，`Save` 保存。API Key 支持清空后保存。
+
+## 热键设置与录制
+在 `Settings` 窗口点击「触发热键」录制框后：
+
+1. 进入监听状态，显示「请按下快捷键...」
+2. 支持单键或组合键（如 `RightCtrl+R`、`RightCtrl+RightShift+R`）
+3. 按 `Esc` 取消本次录制并恢复原值
+4. 点击 `Save` 后立即生效，无需重启应用
+
+录制期间会临时屏蔽语音触发，避免在设置热键时误启动语音识别。
+
+### RightAlt (AltGr) 说明
+- 在部分键盘布局中，按 `RightAlt` 会被系统上报为 `RightCtrl+RightAlt`（AltGr 行为）
+- 为避免误判，录制器会将这类系统附带的 `RightCtrl` 过滤掉，最终显示为 `RightAlt`
+- 因此当前不建议使用 `RightCtrl+RightAlt` 作为热键组合
 
 ## 构建发布
 已配置单文件自包含发布参数（`win-x64`）：
