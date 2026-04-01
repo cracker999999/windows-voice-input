@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build-release:
     runs-on: windows-latest
@@ -27,9 +30,22 @@ jobs:
       - name: Publish Release
         run: dotnet publish VoiceInput/VoiceInput.csproj -c Release -r win-x64 --self-contained true --no-build
 
-      - name: Upload Artifact
+      - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: VoiceInput-win-x64
           path: Release/VoiceInput.exe
           if-no-files-found: error
+
+      - name: Publish To GitHub Releases
+        uses: ncipollo/release-action@v1
+        with:
+          tag: main-latest
+          name: Main Latest Build
+          body: |
+            Auto build from main.
+            Commit: ${{ github.sha }}
+          artifacts: Release/VoiceInput.exe
+          allowUpdates: true
+          replacesArtifacts: true
+          prerelease: true
