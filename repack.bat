@@ -21,7 +21,7 @@ if errorlevel 1 (
 )
 
 echo [4/4] Publishing single-file executable ...
-dotnet publish "VoiceInput\VoiceInput.csproj" -c Release -r win-x64 --self-contained true
+dotnet publish "VoiceInput\VoiceInput.csproj" -c Release -r win-x64 --self-contained false -p:IncludeNativeLibrariesForSelfExtract=true
 if errorlevel 1 (
   echo [ERROR] dotnet publish failed.
   exit /b 1

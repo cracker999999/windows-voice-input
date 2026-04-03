@@ -28,7 +28,7 @@ jobs:
         run: dotnet build VoiceInput/VoiceInput.csproj -c Release --no-restore
 
       - name: Publish Release
-        run: dotnet publish VoiceInput/VoiceInput.csproj -c Release -r win-x64 --self-contained true --no-build
+        run: dotnet publish VoiceInput/VoiceInput.csproj -c Release -r win-x64 --self-contained false -p:IncludeNativeLibrariesForSelfExtract=true --no-build
 
       - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4

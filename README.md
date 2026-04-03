@@ -83,13 +83,17 @@ VoiceInput 是一个 Windows 10 后台语音输入工具：按住录音热键开
 - 因此当前不建议使用 `RightCtrl+RightAlt` 作为热键组合
 
 ## 构建发布
-已配置单文件自包含发布参数（`win-x64`）：
+已配置单文件非自包含发布参数（`win-x64`）：
 - `PublishSingleFile=true`
-- `SelfContained=true`
+- `SelfContained=false`
 - `IncludeNativeLibrariesForSelfExtract=true`
 
 发布命令：
 `dotnet publish VoiceInput\VoiceInput.csproj -c Release -r win-x64`
 
 默认输出目录：`Release\`，目标文件为 `Release\VoiceInput.exe`。
+
+说明：
+- 该模式会尽量将 native 依赖打包进单文件，减少同目录 DLL 文件。
+- 目标机器需安装 `.NET 8 Desktop Runtime (x64)`。
 
