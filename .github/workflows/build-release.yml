@@ -37,15 +37,21 @@ jobs:
           path: Release/VoiceInput.exe
           if-no-files-found: error
 
+      - name: Generate Release Tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = "v$(Get-Date -Format yyyy.MM.dd)-${{ github.run_number }}-${{ github.run_attempt }}"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - name: Publish To GitHub Releases
         uses: ncipollo/release-action@v1
         with:
-          tag: main-latest
-          name: Main Latest Build
+          tag: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
           body: |
             Auto build from main.
+            Ref: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
           artifacts: Release/VoiceInput.exe
-          allowUpdates: true
-          replacesArtifacts: true
           prerelease: true
