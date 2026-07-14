@@ -156,7 +156,7 @@ public sealed class SpeechTranscriptionService : IDisposable
             return;
         }
 
-        InterimTextUpdated?.Invoke(text);
+        InterimTextUpdated?.Invoke(AppendRecognizedText(_latestFinalText, text));
     }
 
     private void OnRecognized(object? sender, SpeechRecognitionEventArgs e)
@@ -172,8 +172,8 @@ public sealed class SpeechTranscriptionService : IDisposable
             return;
         }
 
-        _latestFinalText = text;
-        FinalTextReady?.Invoke(text);
+        _latestFinalText = AppendRecognizedText(_latestFinalText, text);
+        FinalTextReady?.Invoke(_latestFinalText);
     }
 
     private void OnCanceled(object? sender, SpeechRecognitionCanceledEventArgs e)
@@ -210,5 +210,37 @@ public sealed class SpeechTranscriptionService : IDisposable
             _finalTextSource?.TrySetResult(_latestFinalText);
             _finalTextSource = null;
         }
+    }
+
+    private bool ShouldSeparateRecognizedText(string existingText, string nextText)
+    {
+        if (string.IsNullOrEmpty(existingText) || string.IsNullOrEmpty(nextText))
+        {
+            return false;
+        }
+
+        // 英文连续识别会按停顿切成多段，需要补空格；中日韩文本直接拼接，避免插入多余空格。
+        if (!_language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !char.IsWhiteSpace(existingText[^1]) &&
+               !char.IsWhiteSpace(nextText[0]) &&
+               !char.IsPunctuation(nextText[0]);
+    }
+
+    private string AppendRecognizedText(string existingText, string nextText)
+    {
+        var trimmedNextText = nextText.Trim();
+        if (string.IsNullOrWhiteSpace(existingText))
+        {
+            return trimmedNextText;
+        }
+
+        var trimmedExistingText = existingText.TrimEnd();
+        return ShouldSeparateRecognizedText(trimmedExistingText, trimmedNextText)
+            ? $"{trimmedExistingText} {trimmedNextText}"
+            : trimmedExistingText + trimmedNextText;
     }
 }
