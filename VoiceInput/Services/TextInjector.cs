@@ -7,10 +7,12 @@ namespace VoiceInput.Services;
 
 public sealed class TextInjector
 {
-    private const int ClipboardRetryCount = 3;
+    // 剪贴板是全局独占资源，输入法、剪贴板管理器等进程都会短暂持锁。
+    // 单次操作的递增退避总窗口为 840ms（30+60+90+...+210），比固定 3×50ms 更能熬过这类占用。
+    private const int ClipboardRetryCount = 8;
     private const uint InputKeyboard = 1;
     private const uint KeyeventfKeyup = 0x0002;
-    private static readonly TimeSpan ClipboardRetryDelay = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan ClipboardRetryBaseDelay = TimeSpan.FromMilliseconds(30);
 
     private readonly Dispatcher _dispatcher;
 
@@ -26,25 +28,39 @@ public sealed class TextInjector
             return;
         }
 
+        // 备份失败不阻断注入：丢掉用户原有剪贴板内容是小损失，丢掉转写结果是大损失。
         IDataObject? backupClipboard = null;
-        await _dispatcher.InvokeAsync(() => backupClipboard = Clipboard.GetDataObject());
+        await TryClipboardActionAsync(
+            () => backupClipboard = Clipboard.GetDataObject(),
+            cancellationToken).ConfigureAwait(false);
 
-        await ExecuteClipboardActionAsync(() => Clipboard.SetText(text), cancellationToken).ConfigureAwait(false);
+        // 写入是关键步骤：失败还发 Ctrl+V 会把剪贴板里的旧内容粘出去，必须抛出。
+        await ExecuteClipboardActionAsync(
+            () => Clipboard.SetText(text),
+            cancellationToken).ConfigureAwait(false);
 
         SendCtrlV();
         await Task.Delay(100, cancellationToken).ConfigureAwait(false);
 
-        if (backupClipboard is not null)
-        {
-            await ExecuteClipboardActionAsync(() => Clipboard.SetDataObject(backupClipboard, true), cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            await ExecuteClipboardActionAsync(Clipboard.Clear, cancellationToken).ConfigureAwait(false);
-        }
+        // 恢复失败同样只记日志：文本已经粘贴成功，不该因为收尾失败而报错给用户。
+        await TryClipboardActionAsync(
+            () =>
+            {
+                if (backupClipboard is not null)
+                {
+                    Clipboard.SetDataObject(backupClipboard, true);
+                }
+                else
+                {
+                    Clipboard.Clear();
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// 带递增退避的剪贴板操作，重试耗尽后抛出最后一次异常。
+    /// </summary>
     private async Task ExecuteClipboardActionAsync(Action action, CancellationToken cancellationToken)
     {
         for (var attempt = 1; attempt <= ClipboardRetryCount; attempt++)
@@ -58,8 +74,23 @@ public sealed class TextInjector
             }
             catch (ExternalException) when (attempt < ClipboardRetryCount)
             {
-                await Task.Delay(ClipboardRetryDelay, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(ClipboardRetryBaseDelay * attempt, cancellationToken).ConfigureAwait(false);
             }
+        }
+    }
+
+    /// <summary>
+    /// 同上但吞掉最终失败，仅记日志。用于备份/恢复这类失败不影响主目标的操作。
+    /// </summary>
+    private async Task TryClipboardActionAsync(Action action, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await ExecuteClipboardActionAsync(action, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ExternalException ex)
+        {
+            AppLogger.Error("剪贴板操作失败（已忽略，不影响文本注入）。", ex);
         }
     }
 

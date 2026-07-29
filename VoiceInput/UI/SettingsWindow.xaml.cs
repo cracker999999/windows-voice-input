@@ -15,6 +15,7 @@ public partial class SettingsWindow
 
     private readonly ConfigService _configService;
     private readonly LlmRefinementService _llmRefinementService;
+    private readonly CloudflareTranscriptionService _cloudflareService;
     private readonly Action<string> _onHotkeyChanged;
     private readonly Action<bool> _onHotkeyRecordingStateChanged;
 
@@ -25,11 +26,13 @@ public partial class SettingsWindow
     public SettingsWindow(
         ConfigService configService,
         LlmRefinementService llmRefinementService,
+        CloudflareTranscriptionService cloudflareService,
         Action<string> onHotkeyChanged,
         Action<bool> onHotkeyRecordingStateChanged)
     {
         _configService = configService;
         _llmRefinementService = llmRefinementService;
+        _cloudflareService = cloudflareService;
         _onHotkeyChanged = onHotkeyChanged;
         _onHotkeyRecordingStateChanged = onHotkeyRecordingStateChanged;
 
@@ -43,6 +46,17 @@ public partial class SettingsWindow
         var config = _configService.Current;
         AzureSpeechKeyTextBox.Text = config.AzureSpeechKey;
         AzureSpeechRegionTextBox.Text = config.AzureSpeechRegion;
+        CloudflareAccountIdTextBox.Text = config.CloudflareAccountId;
+        CloudflareApiTokenTextBox.Text = config.CloudflareApiToken;
+
+        if (config.UsesCloudflare)
+        {
+            CloudflareProviderRadioButton.IsChecked = true;
+        }
+        else
+        {
+            AzureProviderRadioButton.IsChecked = true;
+        }
 
         _selectedHotkey = NormalizeHotkey(config.FallbackHotkey);
         HotkeyRecorderTextBlock.Text = _selectedHotkey;
@@ -50,6 +64,53 @@ public partial class SettingsWindow
         ApiBaseUrlTextBox.Text = config.ApiBaseUrl;
         ApiKeyTextBox.Text = config.ApiKey;
         ModelTextBox.Text = config.Model;
+    }
+
+    private void OnSpeechProviderChanged(object sender, RoutedEventArgs e)
+    {
+        // Checked 事件在 InitializeComponent 期间就可能触发，此时面板字段尚未赋值。
+        if (AzurePanel is null || CloudflarePanel is null)
+        {
+            return;
+        }
+
+        var useCloudflare = CloudflareProviderRadioButton.IsChecked == true;
+        AzurePanel.Visibility = useCloudflare ? Visibility.Collapsed : Visibility.Visible;
+        CloudflarePanel.Visibility = useCloudflare ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private string SelectedProvider =>
+        CloudflareProviderRadioButton.IsChecked == true
+            ? AppConfig.ProviderCloudflare
+            : AppConfig.ProviderAzure;
+
+    private async void OnTestSpeechButtonClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ToggleButtons(false);
+            SetStatus("正在测试语音服务...", false);
+
+            var draftConfig = BuildDraftConfig();
+            if (draftConfig.UsesCloudflare)
+            {
+                var result = await _cloudflareService.TestConnectionAsync(draftConfig);
+                SetStatus(result.Message, result.Success);
+            }
+            else
+            {
+                var result = await SpeechTranscriptionService.TestConnectionAsync(draftConfig);
+                SetStatus(result.Message, result.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"测试失败: {ex.Message}", false);
+        }
+        finally
+        {
+            ToggleButtons(true);
+        }
     }
 
     private async void OnTestButtonClick(object sender, RoutedEventArgs e)
@@ -81,29 +142,17 @@ public partial class SettingsWindow
             CancelHotkeyRecording();
         }
 
-        var apiBaseUrl = ApiBaseUrlTextBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(apiBaseUrl))
+        var draftConfig = BuildDraftConfig();
+        if (string.IsNullOrWhiteSpace(draftConfig.ApiBaseUrl))
         {
             SetStatus("API Base URL 不能为空。", false);
             return;
         }
 
-        var model = string.IsNullOrWhiteSpace(ModelTextBox.Text)
-            ? AppConfig.DefaultModel
-            : ModelTextBox.Text.Trim();
-
         var oldHotkey = _configService.Current.FallbackHotkey;
-        var newHotkey = NormalizeHotkey(_selectedHotkey);
+        var newHotkey = draftConfig.FallbackHotkey;
 
-        _configService.Update(config =>
-        {
-            config.AzureSpeechKey = AzureSpeechKeyTextBox.Text?.Trim() ?? string.Empty;
-            config.AzureSpeechRegion = AzureSpeechRegionTextBox.Text?.Trim() ?? string.Empty;
-            config.FallbackHotkey = newHotkey;
-            config.ApiBaseUrl = apiBaseUrl;
-            config.ApiKey = ApiKeyTextBox.Text ?? string.Empty;
-            config.Model = model;
-        });
+        _configService.Save(draftConfig);
 
         if (!string.Equals(oldHotkey, newHotkey, StringComparison.OrdinalIgnoreCase))
         {
@@ -341,8 +390,11 @@ public partial class SettingsWindow
     private AppConfig BuildDraftConfig()
     {
         var current = _configService.Current.Clone();
+        current.SpeechProvider = SelectedProvider;
         current.AzureSpeechKey = AzureSpeechKeyTextBox.Text?.Trim() ?? string.Empty;
         current.AzureSpeechRegion = AzureSpeechRegionTextBox.Text?.Trim() ?? string.Empty;
+        current.CloudflareAccountId = CloudflareAccountIdTextBox.Text?.Trim() ?? string.Empty;
+        current.CloudflareApiToken = CloudflareApiTokenTextBox.Text?.Trim() ?? string.Empty;
         current.FallbackHotkey = NormalizeHotkey(_selectedHotkey);
         current.ApiBaseUrl = ApiBaseUrlTextBox.Text.Trim();
         current.ApiKey = ApiKeyTextBox.Text ?? string.Empty;
@@ -355,6 +407,7 @@ public partial class SettingsWindow
 
     private void ToggleButtons(bool enabled)
     {
+        TestSpeechButton.IsEnabled = enabled;
         TestButton.IsEnabled = enabled;
         SaveButton.IsEnabled = enabled;
     }
@@ -367,7 +420,7 @@ public partial class SettingsWindow
             : Brushes.IndianRed;
     }
 
-    private void OnAzureQuotaLinkRequestNavigate(object sender, RequestNavigateEventArgs e)
+    private void OnExternalLinkRequestNavigate(object sender, RequestNavigateEventArgs e)
     {
         if (e.Uri is null)
         {
@@ -383,7 +436,7 @@ public partial class SettingsWindow
         }
         catch (Exception ex)
         {
-            SetStatus($"打开 Azure Portal 失败: {ex.Message}", false);
+            SetStatus($"打开链接失败: {ex.Message}", false);
         }
         finally
         {

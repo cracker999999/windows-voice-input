@@ -96,9 +96,25 @@ public partial class OverlayWindow
         AnimateCapsuleWidth(CalculateTargetWidth(TranscriptText.Text));
     }
 
+    /// <summary>当前胶囊上显示的文本。</summary>
+    private string CurrentText => TranscriptText.Text;
+
     public void ShowRefining()
     {
         UpdateText("Refining...");
+    }
+
+    public void ShowTranscribing()
+    {
+        UpdateText("Transcribing...");
+    }
+
+    public void ShowTranscribingIfEmpty()
+    {
+        if (string.IsNullOrEmpty(CurrentText))
+        {
+            ShowTranscribing();
+        }
     }
 
     public void UpdateRms(float rms)
@@ -233,4 +249,3 @@ public partial class OverlayWindow
         }
     }
 }
-

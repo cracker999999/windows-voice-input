@@ -16,6 +16,12 @@ public sealed class ConfigService
         "ko-KR"
     };
 
+    private static readonly string[] SupportedProviders =
+    {
+        AppConfig.ProviderAzure,
+        AppConfig.ProviderCloudflare
+    };
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -139,6 +145,11 @@ public sealed class ConfigService
             ? AppConfig.DefaultFallbackHotkey
             : config.FallbackHotkey.Trim();
 
+        // 只认 Azure / Cloudflare 两个值，其余（含旧配置缺字段）回落到默认供应商。
+        var speechProvider = SupportedProviders.FirstOrDefault(provider =>
+            string.Equals(provider, config.SpeechProvider?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? AppConfig.DefaultSpeechProvider;
+
         return new AppConfig
         {
             Language = language,
@@ -146,8 +157,11 @@ public sealed class ConfigService
             ApiBaseUrl = apiBaseUrl,
             ApiKey = config.ApiKey ?? string.Empty,
             Model = model,
+            SpeechProvider = speechProvider,
             AzureSpeechKey = config.AzureSpeechKey?.Trim() ?? string.Empty,
             AzureSpeechRegion = config.AzureSpeechRegion?.Trim() ?? string.Empty,
+            CloudflareAccountId = config.CloudflareAccountId?.Trim() ?? string.Empty,
+            CloudflareApiToken = config.CloudflareApiToken?.Trim() ?? string.Empty,
             FallbackHotkey = fallbackHotkey
         };
     }

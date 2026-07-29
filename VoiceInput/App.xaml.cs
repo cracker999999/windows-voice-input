@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -33,8 +34,15 @@ public partial class App
     private LowLevelKeyboardHook? _keyboardHook;
     private AudioRecorder? _audioRecorder;
     private SpeechTranscriptionService? _speechService;
+    private CloudflareTranscriptionService? _cloudflareService;
+    private SegmentedTranscriptionCoordinator? _segmentCoordinator;
     private LlmRefinementService? _llmService;
     private TextInjector? _textInjector;
+
+    /// <summary>
+    /// 本轮录音使用的供应商。按下热键时锁定，避免录音期间改配置导致停止流程走错分支。
+    /// </summary>
+    private bool _currentRoundUsesCloudflare;
 
     private bool _isRecording;
     private volatile bool _suppressHotkeyTrigger;
@@ -55,13 +63,20 @@ public partial class App
         _overlayWindow = new OverlayWindow();
 
         _audioRecorder = new AudioRecorder();
-        _audioRecorder.RmsChanged += rms => Dispatcher.BeginInvoke(() => _overlayWindow?.UpdateRms(rms));
+        _audioRecorder.RmsChanged += OnAudioRms;
         _audioRecorder.ErrorOccurred += ShowErrorBalloon;
 
         _speechService = new SpeechTranscriptionService(_configService);
         _speechService.SetLanguage(config.Language);
         _speechService.InterimTextUpdated += text => Dispatcher.BeginInvoke(() => _overlayWindow?.UpdateText(text));
         _speechService.ErrorOccurred += ShowErrorBalloon;
+
+        _cloudflareService = new CloudflareTranscriptionService(_configService);
+        _cloudflareService.ErrorOccurred += ShowErrorBalloon;
+
+        _segmentCoordinator = new SegmentedTranscriptionCoordinator(_audioRecorder, _cloudflareService);
+        _segmentCoordinator.PartialTextUpdated += text =>
+            Dispatcher.BeginInvoke(() => _overlayWindow?.UpdateText(text));
 
         _llmService = new LlmRefinementService(_configService);
         _llmService.SetEnabled(config.LlmEnabled);
@@ -70,7 +85,7 @@ public partial class App
 
         SetupTrayIcon();
 
-        if (!HasAzureSpeechConfig(config))
+        if (!HasSpeechConfig(config))
         {
             Dispatcher.BeginInvoke(OpenSettingsWindow);
         }
@@ -97,6 +112,7 @@ public partial class App
         _keyboardHook?.Dispose();
         _audioRecorder?.Dispose();
         _speechService?.Dispose();
+        _cloudflareService?.Dispose();
         _llmService?.Dispose();
         _trayIcon?.Dispose();
 
@@ -234,7 +250,7 @@ public partial class App
             return;
         }
 
-        if (_configService is null || _llmService is null)
+        if (_configService is null || _llmService is null || _cloudflareService is null)
         {
             return;
         }
@@ -242,6 +258,7 @@ public partial class App
         _settingsWindow = new SettingsWindow(
             _configService,
             _llmService,
+            _cloudflareService,
             key => _keyboardHook?.SetFallbackHotkey(key),
             isRecordingHotkey => _suppressHotkeyTrigger = isRecordingHotkey)
         {
@@ -299,7 +316,8 @@ public partial class App
             if (_configService is null ||
                 _speechService is null ||
                 _audioRecorder is null ||
-                _overlayWindow is null)
+                _overlayWindow is null ||
+                _segmentCoordinator is null)
             {
                 return;
             }
@@ -308,16 +326,21 @@ public partial class App
             _speechService.SetLanguage(config.Language);
             _keyboardHook?.SetFallbackHotkey(config.FallbackHotkey);
 
-            if (!HasAzureSpeechConfig(config))
+            if (!HasSpeechConfig(config))
             {
+                var missingHint = config.UsesCloudflare
+                    ? "请先在 Settings 中配置 Cloudflare Account ID 与 API Token。"
+                    : "请先在 Settings 中配置 Azure Speech Key 与 Region。";
+
                 await Dispatcher.InvokeAsync(() =>
                 {
                     OpenSettingsWindow();
-                    ShowErrorBalloon("请先在 Settings 中配置 Azure Speech Key 与 Region。");
+                    ShowErrorBalloon(missingHint);
                 });
                 return;
             }
 
+            _currentRoundUsesCloudflare = config.UsesCloudflare;
             _isRecording = true;
 
             await Dispatcher.InvokeAsync(() =>
@@ -327,8 +350,18 @@ public partial class App
                 _overlayWindow.ShowOverlay();
             });
 
-            var stream = _audioRecorder.Start();
-            await _speechService.StartAsync(stream).ConfigureAwait(false);
+            if (_currentRoundUsesCloudflare)
+            {
+                // whisper 无法流式，改为缓冲 + VAD 分段：说话停顿处切段并行上传，
+                // 松键时只剩最后一段待返回，等待时间不再随录音时长线性增长。
+                _segmentCoordinator.Start(config.Language);
+                _audioRecorder.StartBuffering();
+            }
+            else
+            {
+                var stream = _audioRecorder.StartStreaming();
+                await _speechService.StartAsync(stream).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -366,6 +399,7 @@ public partial class App
 
             if (_audioRecorder is null ||
                 _speechService is null ||
+                _cloudflareService is null ||
                 _overlayWindow is null ||
                 _textInjector is null)
             {
@@ -375,7 +409,24 @@ public partial class App
             _isRecording = false;
             _audioRecorder.Stop();
 
-            var transcript = await _speechService.StopAsync().ConfigureAwait(false);
+            string transcript;
+            if (_currentRoundUsesCloudflare)
+            {
+                if (_segmentCoordinator is null)
+                {
+                    return;
+                }
+
+                // 已完成的分段此时已显示在胶囊上，只有末段还在飞时才提示，避免覆盖已有文本。
+                await Dispatcher.InvokeAsync(_overlayWindow.ShowTranscribingIfEmpty);
+
+                transcript = await _segmentCoordinator.CompleteAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                transcript = await _speechService.StopAsync().ConfigureAwait(false);
+            }
+
             if (string.IsNullOrWhiteSpace(transcript))
             {
                 await HideOverlayOnUiAsync().ConfigureAwait(false);
@@ -392,7 +443,18 @@ public partial class App
                 await Dispatcher.InvokeAsync(() => _overlayWindow.UpdateText(finalText));
             }
 
-            await _textInjector.InjectAsync(finalText).ConfigureAwait(false);
+            try
+            {
+                await _textInjector.InjectAsync(finalText).ConfigureAwait(false);
+            }
+            catch (ExternalException ex)
+            {
+                // 剪贴板被其他进程长期占用时注入会失败。转写结果已经拿到，
+                // 写进日志让用户还能找回，而不是笼统报「录音流程失败」。
+                AppLogger.Error($"文本注入失败，转写结果: {finalText}", ex);
+                ShowErrorBalloon("剪贴板被占用，注入失败。文本已记入 voiceinput.log。");
+            }
+
             await HideOverlayOnUiAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -405,6 +467,20 @@ public partial class App
         finally
         {
             _pipelineLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// 音频帧 RMS 回调，运行在 NAudio 录音线程。
+    /// 波形更新需切回 UI 线程；分段判断留在录音线程，避免 UI 繁忙时错过切段时机。
+    /// </summary>
+    private void OnAudioRms(float rms)
+    {
+        Dispatcher.BeginInvoke(() => _overlayWindow?.UpdateRms(rms));
+
+        if (_currentRoundUsesCloudflare)
+        {
+            _segmentCoordinator?.OnAudioFrame(rms, AudioRecorder.FrameDuration);
         }
     }
 
@@ -431,10 +507,13 @@ public partial class App
         });
     }
 
-    private static bool HasAzureSpeechConfig(Models.AppConfig config)
+    private static bool HasSpeechConfig(Models.AppConfig config)
     {
-        return !string.IsNullOrWhiteSpace(config.AzureSpeechKey) &&
-               !string.IsNullOrWhiteSpace(config.AzureSpeechRegion);
+        return config.UsesCloudflare
+            ? !string.IsNullOrWhiteSpace(config.CloudflareAccountId) &&
+              !string.IsNullOrWhiteSpace(config.CloudflareApiToken)
+            : !string.IsNullOrWhiteSpace(config.AzureSpeechKey) &&
+              !string.IsNullOrWhiteSpace(config.AzureSpeechRegion);
     }
 
     private void RegisterGlobalExceptionHandlers()
@@ -470,6 +549,5 @@ public partial class App
         e.SetObserved();
     }
 }
-
 
 

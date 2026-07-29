@@ -53,6 +53,64 @@ public sealed class SpeechTranscriptionService : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// 用一段静音走一次完整识别，验证 Key/Region 是否可用。静音返回空文本属正常，只要不报鉴权错误即视为连通。
+    /// </summary>
+    public static async Task<(bool Success, string Message)> TestConnectionAsync(
+        AppConfig testConfig,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(testConfig.AzureSpeechKey))
+        {
+            return (false, "Azure Speech Key 不能为空。");
+        }
+
+        if (string.IsNullOrWhiteSpace(testConfig.AzureSpeechRegion))
+        {
+            return (false, "Azure Region 不能为空。");
+        }
+
+        try
+        {
+            var speechConfig = SpeechConfig.FromSubscription(
+                testConfig.AzureSpeechKey.Trim(),
+                testConfig.AzureSpeechRegion.Trim());
+            speechConfig.SpeechRecognitionLanguage = testConfig.Language;
+
+            using var pushStream = AudioInputStream.CreatePushStream(
+                AudioStreamFormat.GetWaveFormatPCM(16000, 16, 1));
+            pushStream.Write(new byte[16000 * 2 / 2]); // 0.5 秒静音
+            pushStream.Close();
+
+            using var audioConfig = AudioConfig.FromStreamInput(pushStream);
+            using var recognizer = new SpeechRecognizer(speechConfig, audioConfig);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(15));
+
+            var recognizeTask = recognizer.RecognizeOnceAsync();
+            var result = await recognizeTask.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+
+            if (result.Reason != ResultReason.Canceled)
+            {
+                return (true, "Azure Speech 连接成功。");
+            }
+
+            var details = CancellationDetails.FromResult(result);
+            return details.Reason == CancellationReason.EndOfStream
+                ? (true, "Azure Speech 连接成功。")
+                : (false, $"Azure Speech 连接失败: {details.ErrorDetails}");
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, "Azure Speech 连接超时（15秒）。");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Azure Speech 连接失败: {ex.Message}");
+        }
+    }
+
     public async Task StartAsync(PushAudioInputStream inputStream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(inputStream);
@@ -212,35 +270,8 @@ public sealed class SpeechTranscriptionService : IDisposable
         }
     }
 
-    private bool ShouldSeparateRecognizedText(string existingText, string nextText)
-    {
-        if (string.IsNullOrEmpty(existingText) || string.IsNullOrEmpty(nextText))
-        {
-            return false;
-        }
-
-        // 英文连续识别会按停顿切成多段，需要补空格；中日韩文本直接拼接，避免插入多余空格。
-        if (!_language.StartsWith("en", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return !char.IsWhiteSpace(existingText[^1]) &&
-               !char.IsWhiteSpace(nextText[0]) &&
-               !char.IsPunctuation(nextText[0]);
-    }
-
     private string AppendRecognizedText(string existingText, string nextText)
     {
-        var trimmedNextText = nextText.Trim();
-        if (string.IsNullOrWhiteSpace(existingText))
-        {
-            return trimmedNextText;
-        }
-
-        var trimmedExistingText = existingText.TrimEnd();
-        return ShouldSeparateRecognizedText(trimmedExistingText, trimmedNextText)
-            ? $"{trimmedExistingText} {trimmedNextText}"
-            : trimmedExistingText + trimmedNextText;
+        return TranscriptionText.Append(existingText, nextText, _language);
     }
 }
