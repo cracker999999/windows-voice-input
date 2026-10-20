@@ -36,7 +36,7 @@ public sealed class TextInjector
 
         // 写入是关键步骤：失败还发 Ctrl+V 会把剪贴板里的旧内容粘出去，必须抛出。
         await ExecuteClipboardActionAsync(
-            () => Clipboard.SetText(text),
+            () => Clipboard.SetDataObject(text, false),
             cancellationToken).ConfigureAwait(false);
 
         SendCtrlV();
@@ -48,7 +48,7 @@ public sealed class TextInjector
             {
                 if (backupClipboard is not null)
                 {
-                    Clipboard.SetDataObject(backupClipboard, true);
+                    Clipboard.SetDataObject(backupClipboard, false);
                 }
                 else
                 {

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
+using NAudio;
 using VoiceInput.Services;
 using VoiceInput.UI;
 
@@ -367,7 +368,10 @@ public partial class App
         {
             _isRecording = false;
             AppLogger.Error("开始录音流程异常。", ex);
-            ShowErrorBalloon($"开始录音失败: {ex.Message}");
+            var errorMessage = ex is MmException { Result: MmResult.BadDeviceId }
+                ? "没找到麦克风"
+                : $"开始录音失败: {ex.Message}";
+            ShowErrorBalloon(errorMessage);
             await HideOverlayOnUiAsync().ConfigureAwait(false);
         }
         finally
@@ -549,5 +553,4 @@ public partial class App
         e.SetObserved();
     }
 }
-
 
